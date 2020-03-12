@@ -388,7 +388,7 @@ pub async fn authorize() -> Result<String> {
 }
 fn open_authorization_page() -> Result<String> {
     println!("Opening browser, please authorize redelete to access your account.");
-    let state = nanoid::simple();
+    let state = nanoid::nanoid!();
     let url = format!(
         "{}/api/v1/authorize?client_id={}&response_type={}&state={}&redirect_uri={}&duration={}&scope={}",
         auth_domain(),
