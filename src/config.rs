@@ -237,7 +237,7 @@ pub fn read_config_account_info(username: &str) -> Option<AccountInfo> {
 pub mod tests {
     use super::*;
     #[test]
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn test_config_dir() {
         assert_eq!(
             config_dir(),
@@ -248,7 +248,7 @@ pub mod tests {
         )
     }
     #[test]
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn test_token_file_path() {
         assert_eq!(
             config_file_path(),
