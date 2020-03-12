@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate clap;
 
-use futures::{future::join_all, try_join};
+use futures::future::join_all;
 use std::result;
-use tokio;
+use tokio::{self, try_join};
 mod config;
 mod oauth_server;
 mod reddit_api;

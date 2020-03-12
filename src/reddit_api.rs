@@ -2,7 +2,6 @@ use super::{
     config::{read_config_account_info, save_token, AccountInfo, ConfigError},
     oauth_server::{wait_for_oauth_redirect, OAuthRedirect},
 };
-use async_std::sync::Mutex;
 use custom_error::custom_error;
 use rate_limit::SyncLimiter;
 use reqwest::{header, Client};
@@ -12,6 +11,7 @@ use std::{
     result,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tokio::sync::Mutex;
 use webbrowser;
 
 #[cfg(test)]
