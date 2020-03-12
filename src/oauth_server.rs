@@ -1,7 +1,9 @@
 use serde::{Deserialize, Serialize};
-use std::cmp::{Eq, PartialEq};
-use std::collections::HashMap;
-use std::net::TcpListener;
+use std::{
+    cmp::{Eq, PartialEq},
+    collections::HashMap,
+    net::TcpListener,
+};
 use tiny_http::Server;
 use url::Url;
 
@@ -17,10 +19,7 @@ pub struct OAuthRedirect {
 }
 
 fn port_is_available(port: u16) -> bool {
-    match TcpListener::bind(("127.0.0.1", port)) {
-        Ok(_) => true,
-        Err(_) => false,
-    }
+    TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 fn get_available_port(start: u16, end: u16) -> Option<u16> {
     (start..end).find(|port| port_is_available(*port))
@@ -49,20 +48,16 @@ pub fn wait_for_oauth_redirect(
     start: u16,
     end: u16,
 ) -> Result<OAuthRedirect, Box<dyn std::error::Error>> {
-    let port = get_available_port(start, end).expect(&format!(
-        "Please open up port 8000 and rerun the authorization." // "Unable to find an open port in range {} to {}, please open up a port.",
-                                                                // start, end
-    ));
+    let port = get_available_port(start, end)
+        .unwrap_or_else(|| panic!("Please open up port 8000 and rerun the authorization."));
     let server = Server::http(format!("0.0.0.0:{}", port))
         .expect("Could not start tiny_http server for oauth2 authentication.");
     let request = server
         .recv()
         .expect("Something went wrong unwrapping the request received from the oauth2 redirect.");
     let params: HashMap<String, String> = Url::query_pairs(
-        &Url::parse(&format!("http://localhost:{}{}", port, request.url())).expect(&format!(
-            "Unable to parse redirect querystring: {}",
-            request.url()
-        )),
+        &Url::parse(&format!("http://localhost:{}{}", port, request.url()))
+            .unwrap_or_else(|_| panic!("Unable to parse redirect querystring: {}", request.url())),
     )
     .into_owned()
     .collect();

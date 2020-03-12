@@ -1,13 +1,17 @@
-use super::config::{read_config_account_info, save_token, AccountInfo, ConfigError};
-use super::oauth_server::{wait_for_oauth_redirect, OAuthRedirect};
+use super::{
+    config::{read_config_account_info, save_token, AccountInfo, ConfigError},
+    oauth_server::{wait_for_oauth_redirect, OAuthRedirect},
+};
 use async_std::sync::Mutex;
 use custom_error::custom_error;
 use rate_limit::SyncLimiter;
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::result;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    result,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use webbrowser;
 
 #[cfg(test)]
@@ -40,10 +44,10 @@ fn domain() -> String {
     String::from(&*server_url())
 }
 
-const DELETE_ENDPOINT: &'static str = "/api/del";
-const ACCESS_TOKEN_ENDPOINT: &'static str = "/api/v1/access_token";
-const ACCOUNT_INFO_ENDPOINT: &'static str = "/api/v1/me";
-const USER_AGENT_STRING: &'static str = "redelete: v0.0.1 (by /u/ardeaf)";
+const DELETE_ENDPOINT: &str = "/api/del";
+const ACCESS_TOKEN_ENDPOINT: &str = "/api/v1/access_token";
+const ACCOUNT_INFO_ENDPOINT: &str = "/api/v1/me";
+const USER_AGENT_STRING: &str = "redelete: v0.0.1 (by /u/ardeaf)";
 
 const CLIENT_ID: &str = "8h7fZ5mmBb8uxA";
 const RESPONSE_TYPE: &str = "code";
@@ -187,7 +191,7 @@ impl RedditClient {
             ratelimiter: SyncLimiter::full(55, Duration::from_secs(60)),
         }
     }
-    async fn post(&self, endpoint: &str, params: &Vec<(&str, &str)>) -> Result<String> {
+    async fn post(&self, endpoint: &str, params: &[(&str, &str)]) -> Result<String> {
         let ai = self.check_account_info().await?;
         self.ratelimiter.take();
         let response = self
@@ -200,7 +204,7 @@ impl RedditClient {
         let response_text = response.text().await?;
         Ok(response_text)
     }
-    async fn fetch(self: &Self, endpoint: &str, params: &Vec<(&str, String)>) -> Result<String> {
+    async fn fetch(self: &Self, endpoint: &str, params: &[(&str, String)]) -> Result<String> {
         let ai = self.check_account_info().await?;
         self.ratelimiter.take();
         let a = self
@@ -285,10 +289,12 @@ impl RedditClient {
             Ok(ai)
         } else {
             let refresh = self
-                .refresh(&ai.token.refresh_token.expect(&format!(
-                    "Unable to read refresh token from account {}, please reauthorize it.",
-                    ai.username
-                )))
+                .refresh(ai.token.refresh_token.as_ref().unwrap_or_else(|| {
+                    panic!(
+                        "Unable to read refresh token from account {}, please reauthorize it.",
+                        ai.username
+                    )
+                }))
                 .await?;
             Ok(refresh)
         }
@@ -408,23 +414,23 @@ mod tests {
     use super::*;
     use mockito::mock;
 
-    const STATE: &'static str = "abcdefg";
-    const TEST_USER: &'static str = "TestUser";
-    const REFRESHED_ACCESS_TOKEN: &'static str = "REFRESHED_ACCESS_TOKEN";
-    const REFRESH_TOKEN_BODY: &'static str = r#"{
+    const STATE: &str = "abcdefg";
+    const TEST_USER: &str = "TestUser";
+    const REFRESHED_ACCESS_TOKEN: &str = "REFRESHED_ACCESS_TOKEN";
+    const REFRESH_TOKEN_BODY: &str = r#"{
     "access_token": "REFRESHED_ACCESS_TOKEN",
     "token_type": "bearer",
     "expires_in": 3600,
     "scope": "history,edit,account"
 }"#;
-    const TOKEN_BODY: &'static str = r#"{
+    const TOKEN_BODY: &str = r#"{
     "access_token": "ACCESS_TOKEN", 
     "token_type": "bearer", 
     "expires_in": 3600,
     "scope": "history,edit,account",
     "refresh_token": "REFRESH_TOKEN"
 }"#;
-    const USER_INFO_BODY: &'static str = "{\"is_employee\": false, \"seen_layout_switch\": true, \"has_visited_new_profile\": true, \"pref_no_profanity\": false, \"has_external_account\": false, \"pref_geopopular\": \"GLOBAL\", \"seen_redesign_modal\": true, \"pref_show_trending\": true, \"subreddit\": {\"default_set\": true, \"user_is_contributor\": false, \"banner_img\": \"\", \"restrict_posting\": true, \"user_is_banned\": false, \"free_form_reports\": true, \"community_icon\": \"\", \"show_media\": true, \"icon_color\": \"#A5A4A4\", \"user_is_muted\": false, \"display_name\": \"u_ardeaf\", \"header_img\": null, \"title\": \"\", \"coins\": 0, \"over_18\": false, \"icon_size\": [256, 256], \"primary_color\": \"\", \"icon_img\": \"https://www.redditstatic.com/avatars/avatar_default_01_A5A4A4.png\", \"description\": \"\", \"submit_link_label\": \"\", \"header_size\": null, \"restrict_commenting\": false, \"subscribers\": 0, \"submit_text_label\": \"\", \"is_default_icon\": true, \"link_flair_position\": \"\", \"display_name_prefixed\": \"u/ardeaf\", \"key_color\": \"\", \"name\": \"t5_auurt\", \"is_default_banner\": true, \"url\": \"/user/ardeaf/\", \"banner_size\": null, \"user_is_moderator\": true, \"public_description\": \"\", \"link_flair_enabled\": false, \"disable_contributor_requests\": false, \"subreddit_type\": \"user\", \"user_is_subscriber\": false}, \"is_sponsor\": false, \"gold_expiration\": null, \"has_gold_subscription\": false, \"num_friends\": 0, \"features\": {\"promoted_trend_blanks\": true, \"show_amp_link\": true, \"chat\": true, \"twitter_embed\": true, \"is_email_permission_required\": false, \"mod_awards\": true, \"expensive_coins_package\": true, \"mweb_xpromo_revamp_v2\": {\"owner\": \"growth\", \"variant\": \"treatment_5\", \"experiment_id\": 457}, \"awards_on_streams\": true, \"mweb_xpromo_modal_listing_click_daily_dismissible_ios\": true, \"community_awards\": true, \"modlog_copyright_removal\": true, \"do_not_track\": true, \"chat_user_settings\": true, \"mweb_xpromo_interstitial_comments_ios\": true, \"chat_subreddit\": true, \"mweb_xpromo_modal_listing_click_daily_dismissible_android\": true, \"premium_subscriptions_table\": true, \"mweb_xpromo_interstitial_comments_android\": true, \"mweb_nsfw_xpromo\": {\"owner\": \"growth\", \"variant\": \"control_2\", \"experiment_id\": 361}, \"delete_vod_when_post_is_deleted\": true, \"awarder_names\": true, \"chat_group_rollout\": true, \"custom_feeds\": true, \"spez_modal\": true, \"mweb_sharing_clipboard\": {\"owner\": \"growth\", \"variant\": \"treatment_1\", \"experiment_id\": 315}}, \"has_android_subscription\": false, \"verified\": true, \"pref_autoplay\": true, \"coins\": 0, \"has_paypal_subscription\": false, \"has_subscribed_to_premium\": false, \"id\": \"dp1yw\", \"has_stripe_subscription\": false, \"seen_premium_adblock_modal\": false, \"can_create_subreddit\": true, \"over_18\": true, \"is_gold\": false, \"is_mod\": false, \"suspension_expiration_utc\": null, \"has_verified_email\": true, \"is_suspended\": false, \"pref_video_autoplay\": true, \"in_redesign_beta\": true, \"icon_img\": \"https://www.redditstatic.com/avatars/avatar_default_01_A5A4A4.png\", \"pref_nightmode\": true, \"oauth_client_id\": \"8h7fZ5mmBb8uxA\", \"hide_from_robots\": true, \"link_karma\": 102, \"force_password_reset\": false, \"seen_give_award_tooltip\": false, \"inbox_count\": 0, \"pref_top_karma_subreddits\": true, \"pref_show_snoovatar\": false, \"name\": \"ardeaf\", \"pref_clickgadget\": 5, \"created\": 1383088257.0, \"gold_creddits\": 0, \"created_utc\": 1383059457.0, \"has_ios_subscription\": false, \"pref_show_twitter\": false, \"in_beta\": false, \"comment_karma\": 4144, \"has_subscribed\": true, \"seen_subreddit_chat_ftux\": false}";
+    const USER_INFO_BODY: &str = "{\"is_employee\": false, \"seen_layout_switch\": true, \"has_visited_new_profile\": true, \"pref_no_profanity\": false, \"has_external_account\": false, \"pref_geopopular\": \"GLOBAL\", \"seen_redesign_modal\": true, \"pref_show_trending\": true, \"subreddit\": {\"default_set\": true, \"user_is_contributor\": false, \"banner_img\": \"\", \"restrict_posting\": true, \"user_is_banned\": false, \"free_form_reports\": true, \"community_icon\": \"\", \"show_media\": true, \"icon_color\": \"#A5A4A4\", \"user_is_muted\": false, \"display_name\": \"u_ardeaf\", \"header_img\": null, \"title\": \"\", \"coins\": 0, \"over_18\": false, \"icon_size\": [256, 256], \"primary_color\": \"\", \"icon_img\": \"https://www.redditstatic.com/avatars/avatar_default_01_A5A4A4.png\", \"description\": \"\", \"submit_link_label\": \"\", \"header_size\": null, \"restrict_commenting\": false, \"subscribers\": 0, \"submit_text_label\": \"\", \"is_default_icon\": true, \"link_flair_position\": \"\", \"display_name_prefixed\": \"u/ardeaf\", \"key_color\": \"\", \"name\": \"t5_auurt\", \"is_default_banner\": true, \"url\": \"/user/ardeaf/\", \"banner_size\": null, \"user_is_moderator\": true, \"public_description\": \"\", \"link_flair_enabled\": false, \"disable_contributor_requests\": false, \"subreddit_type\": \"user\", \"user_is_subscriber\": false}, \"is_sponsor\": false, \"gold_expiration\": null, \"has_gold_subscription\": false, \"num_friends\": 0, \"features\": {\"promoted_trend_blanks\": true, \"show_amp_link\": true, \"chat\": true, \"twitter_embed\": true, \"is_email_permission_required\": false, \"mod_awards\": true, \"expensive_coins_package\": true, \"mweb_xpromo_revamp_v2\": {\"owner\": \"growth\", \"variant\": \"treatment_5\", \"experiment_id\": 457}, \"awards_on_streams\": true, \"mweb_xpromo_modal_listing_click_daily_dismissible_ios\": true, \"community_awards\": true, \"modlog_copyright_removal\": true, \"do_not_track\": true, \"chat_user_settings\": true, \"mweb_xpromo_interstitial_comments_ios\": true, \"chat_subreddit\": true, \"mweb_xpromo_modal_listing_click_daily_dismissible_android\": true, \"premium_subscriptions_table\": true, \"mweb_xpromo_interstitial_comments_android\": true, \"mweb_nsfw_xpromo\": {\"owner\": \"growth\", \"variant\": \"control_2\", \"experiment_id\": 361}, \"delete_vod_when_post_is_deleted\": true, \"awarder_names\": true, \"chat_group_rollout\": true, \"custom_feeds\": true, \"spez_modal\": true, \"mweb_sharing_clipboard\": {\"owner\": \"growth\", \"variant\": \"treatment_1\", \"experiment_id\": 315}}, \"has_android_subscription\": false, \"verified\": true, \"pref_autoplay\": true, \"coins\": 0, \"has_paypal_subscription\": false, \"has_subscribed_to_premium\": false, \"id\": \"dp1yw\", \"has_stripe_subscription\": false, \"seen_premium_adblock_modal\": false, \"can_create_subreddit\": true, \"over_18\": true, \"is_gold\": false, \"is_mod\": false, \"suspension_expiration_utc\": null, \"has_verified_email\": true, \"is_suspended\": false, \"pref_video_autoplay\": true, \"in_redesign_beta\": true, \"icon_img\": \"https://www.redditstatic.com/avatars/avatar_default_01_A5A4A4.png\", \"pref_nightmode\": true, \"oauth_client_id\": \"8h7fZ5mmBb8uxA\", \"hide_from_robots\": true, \"link_karma\": 102, \"force_password_reset\": false, \"seen_give_award_tooltip\": false, \"inbox_count\": 0, \"pref_top_karma_subreddits\": true, \"pref_show_snoovatar\": false, \"name\": \"ardeaf\", \"pref_clickgadget\": 5, \"created\": 1383088257.0, \"gold_creddits\": 0, \"created_utc\": 1383059457.0, \"has_ios_subscription\": false, \"pref_show_twitter\": false, \"in_beta\": false, \"comment_karma\": 4144, \"has_subscribed\": true, \"seen_subreddit_chat_ftux\": false}";
 
     fn oauth_redirect() -> OAuthRedirect {
         OAuthRedirect {
@@ -450,14 +456,8 @@ mod tests {
     }
     #[test]
     fn test_validate_oauth_redirect() {
-        assert_eq!(
-            (),
-            validate_oauth_redirect(String::from(STATE), &oauth_redirect()).unwrap()
-        );
-        assert_eq!(
-            validate_oauth_redirect(String::from(""), &oauth_redirect()).is_err(),
-            true
-        );
+        assert!(validate_oauth_redirect(String::from(STATE), &oauth_redirect()).is_ok());
+        assert!(validate_oauth_redirect(String::from(""), &oauth_redirect()).is_err());
     }
     #[test]
     fn test_fetch_token() {
@@ -516,7 +516,7 @@ mod tests {
         let (_m1, _m2, _m3) = expired_token_mocks();
         let _resp = Runtime::new()
             .unwrap()
-            .block_on(async { client.fetch(ACCOUNT_INFO_ENDPOINT, &vec![]).await.unwrap() });
+            .block_on(async { client.fetch(ACCOUNT_INFO_ENDPOINT, &[]).await.unwrap() });
         let ai = read_config_account_info(&username).unwrap();
         assert_eq!(ai.token.access_token, REFRESHED_ACCESS_TOKEN);
         delete_user(&username).unwrap();
@@ -536,7 +536,7 @@ mod tests {
         save_token(String::from(&reddit_client.username), token()).unwrap();
         let resp = Runtime::new().unwrap().block_on(async {
             reddit_client
-                .post(ACCOUNT_INFO_ENDPOINT, &vec![])
+                .post(ACCOUNT_INFO_ENDPOINT, &[])
                 .await
                 .unwrap()
         });
@@ -555,7 +555,7 @@ mod tests {
         save_token(String::from(&reddit_client.username), token()).unwrap();
         let resp = Runtime::new().unwrap().block_on(async {
             reddit_client
-                .fetch(ACCOUNT_INFO_ENDPOINT, &vec![])
+                .fetch(ACCOUNT_INFO_ENDPOINT, &[])
                 .await
                 .unwrap()
         });
@@ -567,7 +567,7 @@ mod tests {
     fn test_comments() {
         let comments = test_data::comments();
         let end = 40;
-        let mocks: Vec<Mock> = (0..=end.clone())
+        let mocks: Vec<Mock> = (0..=end)
             .map(|i| {
                 let after = match i {
                     40 => String::from("null"),
@@ -586,11 +586,11 @@ mod tests {
                             "before": null
                         }}
                     }}"#,
-                    &String::from(comments.join(", ")),
+                    &comments.join(", "),
                     &after
                 );
                 // let endpoint = &format!("/user/{}/comments", TEST_USER);
-                if i.clone() > 0 {
+                if i > 0 {
                     mock("GET", Matcher::Any)
                         .match_query(Matcher::UrlEncoded("after".into(), i.to_string()))
                         .with_body(body)
@@ -621,7 +621,7 @@ mod tests {
     fn test_posts() {
         let posts = test_data::posts();
         let end = 50;
-        let mocks: Vec<Mock> = (0..=end.clone())
+        let mocks: Vec<Mock> = (0..=end)
             .map(|i| {
                 let after = match i {
                     50 => String::from("null"),
@@ -640,11 +640,11 @@ mod tests {
                             "before": null
                         }}
                     }}"#,
-                    &String::from(posts.join(", ")),
+                    &posts.join(", "),
                     &after
                 );
                 // let endpoint = &format!("/user/{}/submitted", TEST_USER);
-                if i.clone() > 0 {
+                if i > 0 {
                     mock("GET", Matcher::Any)
                         .match_query(Matcher::UrlEncoded("after".into(), i.to_string()))
                         .with_body(body)
@@ -675,9 +675,8 @@ mod tests {
         let client = reddit_client(String::from(TEST_USER));
         save_token(String::from(&client.username), token()).unwrap();
         let _m = mock("POST", DELETE_ENDPOINT).with_status(204).create();
-        let res = Runtime::new()
+        Runtime::new()
             .unwrap()
             .block_on(async { client.delete(String::from("t1_a")).await.unwrap() });
-        assert_eq!((), res)
     }
 }

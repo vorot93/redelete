@@ -1,8 +1,7 @@
 #[macro_use]
 extern crate clap;
 
-use futures::future::join_all;
-use futures::try_join;
+use futures::{future::join_all, try_join};
 use std::result;
 use tokio;
 mod config;
@@ -15,16 +14,16 @@ use std::time;
 #[cfg(test)]
 mod test_data;
 
-const MIN_SCORE: &'static str = "min_score";
-const MAX_HOURS: &'static str = "max_hours";
-const ADD_EXCLUDED_SUBREDDITS: &'static str = "add_excluded";
-const REMOVE_EXCLUDED_SUBREDDITS: &'static str = "remove_excluded";
-const USERNAME: &'static str = "username";
-const AUTHORIZE: &'static str = "authorize";
-const VIEW: &'static str = "view";
-const RUN: &'static str = "run";
-const DRYRUN: &'static str = "dry_run";
-const FORGET_ACCOUNT: &'static str = "forget";
+const MIN_SCORE: &str = "min_score";
+const MAX_HOURS: &str = "max_hours";
+const ADD_EXCLUDED_SUBREDDITS: &str = "add_excluded";
+const REMOVE_EXCLUDED_SUBREDDITS: &str = "remove_excluded";
+const USERNAME: &str = "username";
+const AUTHORIZE: &str = "authorize";
+const VIEW: &str = "view";
+const RUN: &str = "run";
+const DRYRUN: &str = "dry_run";
+const FORGET_ACCOUNT: &str = "forget";
 
 custom_error! {pub RedeleteError
     RedditApiError{ source: reddit_api::RedditApiError } = "Reddit API Error",
@@ -57,27 +56,18 @@ async fn run(username: String, dry: bool) -> Result<()> {
                     println!("{}", &s[..max])
                 }
                 None => {
-                    match p.title {
-                        Some(s) => {
-                            let max = s.len();
-                            println!("submission @ /r/{}:", &p.subreddit);
-                            println!("{}", &s[..max])
-                        }
-                        None => (),
+                    if let Some(s) = p.title {
+                        let max = s.len();
+                        println!("submission @ /r/{}:", &p.subreddit);
+                        println!("{}", &s[..max])
                     }
-                    match p.selftext {
-                        Some(s) => {
-                            let max = s.len();
-                            println!("{}", &s[..max])
-                        }
-                        None => (),
+                    if let Some(s) = p.selftext {
+                        let max = s.len();
+                        println!("{}", &s[..max])
                     }
-                    match p.url {
-                        Some(s) => {
-                            let max = s.len();
-                            println!("{}", &s[..max])
-                        }
-                        None => (),
+                    if let Some(s) = p.url {
+                        let max = s.len();
+                        println!("{}", &s[..max])
                     }
                 }
             }
@@ -105,7 +95,7 @@ async fn run(username: String, dry: bool) -> Result<()> {
 
 fn check_should_delete(ai: &config::AccountInfo, info: &reddit_api::DeletionInfo) -> bool {
     let age: u64 = time::SystemTime::now()
-        .duration_since(time::UNIX_EPOCH + time::Duration::from_secs_f64(info.created_utc.clone()))
+        .duration_since(time::UNIX_EPOCH + time::Duration::from_secs_f64(info.created_utc))
         .unwrap()
         .as_secs()
         / 3600;
@@ -127,7 +117,7 @@ fn check_should_delete(ai: &config::AccountInfo, info: &reddit_api::DeletionInfo
     {
         return false;
     }
-    return true;
+    true
 }
 
 #[tokio::main]
@@ -206,7 +196,7 @@ async fn main() {
         if matches.is_present(MIN_SCORE) {
             let score = value_t!(matches, MIN_SCORE, i32)
                 .expect("Minimum score requires an integer value.");
-            match config::set_minimum_score(username.into(), score.clone()) {
+            match config::set_minimum_score(username.into(), score) {
                 Ok(()) => {
                     if score > 0 {
                         println!("Set minimum score to {}", score)
@@ -220,7 +210,7 @@ async fn main() {
         if matches.is_present(MAX_HOURS) {
             let hours = value_t!(matches, MAX_HOURS, u64)
                 .expect("Maximum hours requires an integer value.");
-            match config::set_max_hours(username.into(), hours.clone()) {
+            match config::set_max_hours(username.into(), hours) {
                 Ok(()) => {
                     if hours > 0 {
                         println!("Max hours set to {}", hours)
@@ -281,7 +271,7 @@ async fn main() {
                     println!(
                         "Not deleting any posts made within {} hour{}.",
                         max_hours.clone(),
-                        if max_hours.clone() == 1 { "" } else { "s" }
+                        if max_hours == 1 { "" } else { "s" }
                     )
                 } else {
                     println!("No time minimum before deleting posts.")
@@ -321,7 +311,7 @@ mod tests {
     use super::*;
     use config::tests::{account_info, fresh_account_info};
     use reddit_api::RedditPost;
-    const SUBREDDIT: &'static str = "subreddit";
+    const SUBREDDIT: &str = "subreddit";
     fn hours_ago_to_epoch(hours: f64) -> f64 {
         time::SystemTime::now()
             .duration_since(time::UNIX_EPOCH)

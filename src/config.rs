@@ -2,11 +2,13 @@ use super::reddit_api::OAuthToken;
 use custom_error::custom_error;
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::PathBuf;
-use std::result;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fs::File,
+    io::prelude::*,
+    path::PathBuf,
+    result,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 #[cfg(test)]
 use serial_test::serial;
@@ -50,7 +52,7 @@ fn save_config(config: Config) -> Result<()> {
     let file_path = config_file_path();
     let mut file = File::create(file_path)?;
     let json = serde_json::to_string(&config)
-        .expect(&format!("Unable to parse config to save {:?}", &config));
+        .unwrap_or_else(|_| panic!("Unable to parse config to save {:?}", &config));
     file.write_all(&json.as_bytes())?;
     Ok(())
 }
@@ -74,7 +76,7 @@ pub fn remove_excluded_subreddits(username: String, subreddits: Vec<&str>) -> Re
     let (_, ai) = get_config_and_account_info(&username)?;
     let es: Vec<String> = ai
         .excluded_subreddits
-        .unwrap_or(Vec::new())
+        .unwrap_or_default()
         .into_iter()
         .filter(|sr| !subreddits.contains(&sr.as_str()))
         .collect();
@@ -84,7 +86,7 @@ pub fn remove_excluded_subreddits(username: String, subreddits: Vec<&str>) -> Re
 
 pub fn add_excluded_subreddits(username: String, subreddits: Vec<&str>) -> Result<()> {
     let (_, ai) = get_config_and_account_info(&username)?;
-    let mut es = ai.excluded_subreddits.unwrap_or(Vec::new()).clone();
+    let mut es = ai.excluded_subreddits.unwrap_or_default();
     for sr in subreddits {
         let s = String::from(sr);
         if !es.contains(&s) {
@@ -97,7 +99,7 @@ pub fn add_excluded_subreddits(username: String, subreddits: Vec<&str>) -> Resul
 
 pub fn set_excluded_subreddits(username: String, excluded_subreddits: Vec<String>) -> Result<()> {
     let (mut c, mut ai) = get_config_and_account_info(&username)?;
-    ai.excluded_subreddits = if excluded_subreddits.len() > 0 {
+    ai.excluded_subreddits = if !excluded_subreddits.is_empty() {
         Some(excluded_subreddits)
     } else {
         None
@@ -118,7 +120,7 @@ pub fn set_max_hours(username: String, max_hours: u64) -> Result<()> {
     } else {
         ai.max_hours = None;
     }
-    c.accounts.push(ai.clone());
+    c.accounts.push(ai);
     Ok(save_config(c)?)
 }
 
@@ -129,7 +131,7 @@ pub fn set_minimum_score(username: String, score: i32) -> Result<()> {
     } else {
         ai.minimum_score = None;
     }
-    c.accounts.push(ai.clone());
+    c.accounts.push(ai);
     Ok(save_config(c)?)
 }
 
@@ -138,7 +140,7 @@ pub fn save_token(username: String, token: OAuthToken) -> Result<AccountInfo> {
         .duration_since(UNIX_EPOCH)
         .expect("Couldn't get systemtime")
         .as_secs()
-        + &token.expires_in;
+        + token.expires_in;
     let (mut config, account_info) = match get_config_and_account_info(&username) {
         Ok((c, mut ai)) => {
             ai.token = token;
@@ -172,9 +174,9 @@ pub fn save_token(username: String, token: OAuthToken) -> Result<AccountInfo> {
 // I think I may have accidentally coded this twice.
 #[cfg(test)]
 pub fn update_token(username: String, token: OAuthToken) -> Result<()> {
-    let account_config =
-        read_config_account_info(&username).expect(&format!("Unable to find user {}", username));
-    let mut token_ = token.clone();
+    let account_config = read_config_account_info(&username)
+        .unwrap_or_else(|| panic!("Unable to find user {}", username));
+    let mut token_ = token;
     token_.refresh_token = account_config.token.refresh_token;
     save_token(username, token_)?;
     Ok(())
@@ -208,7 +210,7 @@ pub fn delete_user(username: &str) -> Result<bool> {
     let config = get_config().unwrap();
     let mut accounts: Vec<AccountInfo> = Vec::new();
     for account in &config.accounts {
-        if account.username != String::from(username) {
+        if account.username != username {
             let acct = account.clone();
             accounts.push(acct);
         } else {
@@ -226,7 +228,7 @@ pub fn delete_user(username: &str) -> Result<bool> {
 pub fn read_config_account_info(username: &str) -> Option<AccountInfo> {
     let config = get_config().unwrap();
     for account in config.accounts {
-        if account.username == String::from(username) {
+        if account.username == username {
             return Some(account);
         }
     }
@@ -327,7 +329,7 @@ pub mod tests {
     #[test]
     #[serial]
     fn test_refresh_user_token() {
-        const NEW_ACCESS_TOKEN: &'static str = "NEW_ACCESS_TOKEN";
+        const NEW_ACCESS_TOKEN: &str = "NEW_ACCESS_TOKEN";
         save_token(test_username(), token()).unwrap();
         let mut new_token = token();
         new_token.refresh_token = None;
@@ -345,46 +347,36 @@ pub mod tests {
     #[serial]
     fn test_set_max_hours() {
         save_token(test_username(), token()).unwrap();
-        assert_eq!(set_max_hours(test_username(), 1).unwrap(), ());
+        assert!(set_max_hours(test_username(), 1).is_ok());
         delete_user(&test_username()).unwrap();
     }
     #[test]
     #[serial]
     fn test_set_minimum_score() {
         save_token(test_username(), token()).unwrap();
-        assert_eq!(set_minimum_score(test_username(), 1000).unwrap(), ());
+        assert!(set_minimum_score(test_username(), 1000).is_ok());
         delete_user(&test_username()).unwrap();
     }
     #[test]
     #[serial]
     fn test_set_excluded_subreddits() {
         save_token(test_username(), token()).unwrap();
-        assert_eq!(
+        assert!(
             set_excluded_subreddits(test_username(), vec!["a".into(), "b".into(), "c".into()])
-                .unwrap(),
-            ()
+                .is_ok()
         );
         let account_info = read_config_account_info(&test_username()).unwrap();
         assert_eq!(
             account_info.excluded_subreddits,
             Some(vec!["a".into(), "b".into(), "c".into()])
         );
-        assert_eq!(
-            set_excluded_subreddits(test_username(), vec![]).unwrap(),
-            ()
-        );
+        assert!(set_excluded_subreddits(test_username(), vec![]).is_ok());
         let account_info = read_config_account_info(&test_username()).unwrap();
         assert_eq!(account_info.excluded_subreddits, None);
-        assert_eq!(
-            add_excluded_subreddits(test_username(), vec!["a"]).unwrap(),
-            ()
-        );
+        assert!(add_excluded_subreddits(test_username(), vec!["a"]).is_ok());
         let account_info = read_config_account_info(&test_username()).unwrap();
         assert_eq!(account_info.excluded_subreddits, Some(vec!["a".into()]));
-        assert_eq!(
-            remove_excluded_subreddits(test_username(), vec!["a"]).unwrap(),
-            ()
-        );
+        assert!(remove_excluded_subreddits(test_username(), vec!["a"]).is_ok());
         let account_info = read_config_account_info(&test_username()).unwrap();
         assert_eq!(account_info.excluded_subreddits, None);
         delete_user(&test_username()).unwrap();
